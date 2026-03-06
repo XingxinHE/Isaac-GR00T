@@ -19,7 +19,11 @@ import json
 import numpy as np
 import threading
 import time
-from robocasa.utils.dataset_registry import TASK_SET_REGISTRY
+
+from gr00t.utils.robocasa_registry import load_dataset_registry_module
+DATASET_REGISTRY = load_dataset_registry_module()
+TASK_SET_REGISTRY = DATASET_REGISTRY.TASK_SET_REGISTRY
+
 from robocasa.utils.dataset_registry_utils import get_task_horizon
 
 from gr00t.eval.robot import RobotInferenceServer
@@ -59,7 +63,7 @@ def run_client(host, port, task_set_list, video_dir, split, n_episodes, n_envs, 
     print("Available modality configs:")
     modality_config = simulation_client.get_modality_config()
     print(modality_config.keys())
-    
+
     all_env_names = []
     for task_set in task_set_list:
         all_env_names += TASK_SET_REGISTRY[task_set]
@@ -68,7 +72,7 @@ def run_client(host, port, task_set_list, video_dir, split, n_episodes, n_envs, 
 
     for env_name in all_env_names:
         this_video_dir = os.path.join(video_dir, "evals", split, env_name)
-        
+
         stats_path = os.path.join(this_video_dir, "stats.json")
         if os.path.exists(stats_path):
             print(f"{env_name} stats already exsits. skipping.")

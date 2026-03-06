@@ -4,8 +4,13 @@ import os
 import numpy as np
 import math
 from termcolor import colored
-from robocasa.utils.dataset_registry import TARGET_TASKS, LIFELONG_LEARNING_TASKS
 from collections import OrderedDict
+
+from gr00t.utils.robocasa_registry import load_dataset_registry_module
+
+DATASET_REGISTRY = load_dataset_registry_module()
+TARGET_TASKS = DATASET_REGISTRY.TARGET_TASKS
+LIFELONG_LEARNING_TASKS = DATASET_REGISTRY.LIFELONG_LEARNING_TASKS
 
 
 TASK_GROUP_MAPPING = OrderedDict()
@@ -61,7 +66,7 @@ def compute_stats(
                 continue
             with open(stats_path, 'r') as f:
                 this_data = json.load(f)
-            
+
             sr_key = f"success_rate"
             if sr_key in this_data:
                 stats[split][task_name] = this_data[sr_key]
@@ -80,7 +85,7 @@ def compute_stats(
                     val *= 100.0
                 group_stats["task_stats"][task][split] = val
 
-        
+
         for split in ["pretrain", "target"]:
             split_vals = [group_stats["task_stats"][task][split] for task in task_names]
             group_stats[f"avg_{split}"] = np.mean([val for val in split_vals if val is not None])

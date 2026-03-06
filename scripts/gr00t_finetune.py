@@ -38,7 +38,7 @@ import torch
 import tyro
 from transformers import TrainingArguments
 
-from robocasa.utils.dataset_registry import DATASET_SOUP_REGISTRY
+from gr00t.utils.robocasa_registry import load_dataset_registry_module
 
 from gr00t.data.dataset import LeRobotMixtureDataset, LeRobotSingleDataset
 from gr00t.data.schema import EmbodimentTag
@@ -47,6 +47,19 @@ from gr00t.experiment.runner import TrainRunner
 from gr00t.model.gr00t_n1 import GR00T_N1_5
 from gr00t.model.transforms import EMBODIMENT_TAG_MAPPING
 from gr00t.utils.peft import get_lora_model
+
+DATASET_SOUP_REGISTRY = load_dataset_registry_module().DATASET_SOUP_REGISTRY
+
+
+def _resolve_precision_flags():
+    if not torch.cuda.is_available():
+        return "float32", False, False, False
+
+    cuda_major = torch.cuda.get_device_capability()[0]
+    supports_bf16 = bool(getattr(torch.cuda, "is_bf16_supported", lambda: False)())
+    if supports_bf16 and cuda_major >= 8:
+        return "bfloat16", True, False, True
+    return "float16", False, True, False
 
 
 
@@ -260,9 +273,13 @@ def main(config: ArgsConfig):
             tune_projector=config.tune_projector, tune_diffusion_model=config.tune_diffusion_model
         )
 
-    # Set the model's compute_dtype to bfloat16
-    model.compute_dtype = "bfloat16"
-    model.config.compute_dtype = "bfloat16"
+    compute_dtype, use_bf16, use_fp16, use_tf32 = _resolve_precision_flags()
+    print(
+        f"Training precision config: compute_dtype={compute_dtype}, "
+        f"bf16={use_bf16}, fp16={use_fp16}, tf32={use_tf32}"
+    )
+    model.compute_dtype = compute_dtype
+    model.config.compute_dtype = compute_dtype
 
     if config.lora_rank > 0:
         model = get_lora_model(
@@ -280,8 +297,9 @@ def main(config: ArgsConfig):
         remove_unused_columns=False,
         deepspeed="",
         gradient_checkpointing=False,
-        bf16=True,
-        tf32=True,
+        bf16=use_bf16,
+        fp16=use_fp16,
+        tf32=use_tf32,
         per_device_train_batch_size=config.batch_size,
         gradient_accumulation_steps=1,
         dataloader_num_workers=config.dataloader_num_workers,
