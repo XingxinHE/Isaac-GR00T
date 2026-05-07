@@ -62,6 +62,34 @@ def _resolve_precision_flags():
     return "float16", False, True, False
 
 
+def _resolve_dataset_weights(ds_soup_list, single_datasets, ds_weights_alpha: float):
+    """Resolve mixture weights from explicit registry weights or dataset length."""
+    explicit_weights = [ds_meta.get("ds_weight") for ds_meta in ds_soup_list]
+
+    if all(weight is not None for weight in explicit_weights):
+        ds_weights = np.array(explicit_weights, dtype=np.float32)
+        source = "registry ds_weight"
+    elif any(weight is not None for weight in explicit_weights):
+        raise ValueError(
+            "Either all datasets in a soup must define ds_weight or none of them should."
+        )
+    else:
+        ds_weights = np.array(
+            [np.power(len(dataset), ds_weights_alpha) for dataset in single_datasets],
+            dtype=np.float32,
+        )
+        source = f"len(dataset) ** {ds_weights_alpha}"
+
+    if np.any(ds_weights <= 0):
+        raise ValueError(f"Dataset weights must be positive, got {ds_weights}")
+
+    # The mixture dataset expects at least one raw weight to be exactly 1.0.
+    if not np.any(np.isclose(ds_weights, 1.0)):
+        ds_weights = ds_weights / ds_weights.max()
+
+    return ds_weights, source
+
+
 
 @dataclass
 class ArgsConfig:
@@ -205,10 +233,10 @@ def main(config: ArgsConfig):
             )
             single_datasets.append(dataset)
 
-        ds_weights = np.array([np.power(len(dataset), config.ds_weights_alpha) for dataset in single_datasets])
-        # the groot dataloader requires that at least one dataset has weight 1.0
-        ds_weights = ds_weights / ds_weights[0]
-        print("dataset weights:", ds_weights)
+        ds_weights, ds_weight_source = _resolve_dataset_weights(
+            ds_soup_list, single_datasets, config.ds_weights_alpha
+        )
+        print(f"dataset weights ({ds_weight_source}):", ds_weights)
         
         train_dataset = LeRobotMixtureDataset(
             data_mixture=[
